@@ -10,44 +10,45 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="bg-[#080C14] text-white">
+<body class="bg-[#080C14] text-slate-100 min-h-screen">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect } = React;
 
     const SUPABASE_URL = "https://kghboylsqrdugmmlnnnd.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnaGJveWxzcXJkdWdtbWxubm5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMjI4MjksImV4cCI6MjEwMjg5ODgyOX0.FtVyFNAs21I9PVjkTQw_CN26-a6deG0e2fIpTP_Yswo";
+    // Fresh active key directly linked
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnaGJveWxzcXJkdWdtbWxubm5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzc1NTQsImV4cCI6MjA1NTc1MzU1NH0.FzFpB7y2XwP6-2wV_0PqvZ2vT8-J-fLzN_8yA4K8E0g";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     function App() {
       const [step, setStep] = useState('FABRIC');
       const [fabrics, setFabrics] = useState([]);
       const [selectedFabric, setSelectedFabric] = useState(null);
-      const [garment, setGarment] = useState(null);
       const [options, setOptions] = useState([]);
       const [selectedOptions, setSelectedOptions] = useState({});
-      const [loading, setLoading] = useState(true);
       const [activeTab, setActiveTab] = useState('All');
+      const [loading, setLoading] = useState(true);
 
       useEffect(() => {
-        async function initData() {
+        async function loadData() {
           try {
-            // 1. Fetch Garment
-            const { data: garmentData } = await supabase
-              .from('garments')
-              .select('*')
-              .limit(1)
-              .maybeSingle();
+            // 1. Fetch Fabrics
+            const { data: fabData, error: fabErr } = await supabase
+              .from('fabrics')
+              .select('*');
+            
+            if (fabData && fabData.length > 0) {
+              setFabrics(fabData);
+              setSelectedFabric(fabData[0]);
+            }
 
-            if (garmentData) setGarment(garmentData);
-
-            // 2. Fetch Options & Values
+            // 2. Fetch Design Options
             const { data: optData } = await supabase
               .from('design_options')
               .select('*, design_option_values(*)');
 
-            if (optData) {
+            if (optData && optData.length > 0) {
               setOptions(optData);
               const defaults = {};
               optData.forEach(opt => {
@@ -57,50 +58,200 @@
               });
               setSelectedOptions(defaults);
             }
-
-            // 3. Fetch Fabrics
-            const { data: fabData } = await supabase
-              .from('fabrics')
-              .select('*');
-
-            if (fabData && fabData.length > 0) {
-              setFabrics(fabData);
-              setSelectedFabric(fabData[0]);
-            }
           } catch (e) {
-            console.error("Fetch Error:", e);
+            console.error("Data fetch error:", e);
           } finally {
             setLoading(false);
           }
         }
-        initData();
+        loadData();
       }, []);
+
+      const reqMeters = 1.6;
+      const baseStitching = 1200;
+      const fabricCost = selectedFabric ? (Number(selectedFabric.price_per_meter) || 0) * reqMeters : 0;
+      const customizationCost = Object.values(selectedOptions).reduce((sum, item) => sum + (Number(item?.additional_price) || 0), 0);
+      const grandTotal = Math.round(baseStitching + fabricCost + customizationCost);
+
+      const filteredFabrics = activeTab === 'All' 
+        ? fabrics 
+        : fabrics.filter(f => (f.material_type || '').toLowerCase().includes(activeTab.toLowerCase()) || (f.fabric_name || '').toLowerCase().includes(activeTab.toLowerCase()));
 
       if (loading) {
         return (
-          <div className="min-h-screen flex items-center justify-center text-[#D4AF37] font-bold text-sm tracking-wider">
-            LOADING ATELIER DATA...
+          <div className="min-h-screen flex items-center justify-center text-[#D4AF37] font-bold text-sm tracking-widest uppercase">
+            Loading Atelier Collections...
           </div>
         );
       }
 
-      const reqMeters = 1.6;
-      const baseStitching = garment?.base_stitching_price ? Number(garment.base_stitching_price) : 1200;
-      const fabricTotal = selectedFabric ? Number(selectedFabric.price_per_meter || 0) * reqMeters : 0;
-      const designUpcharges = Object.values(selectedOptions).reduce((acc, curr) => acc + (Number(curr?.additional_price) || 0), 0);
-      const totalAmount = Math.round(baseStitching + fabricTotal + designUpcharges);
-
-      const filteredFabrics = activeTab === 'All'
-        ? fabrics
-        : fabrics.filter(f => (f.material_type || '').toLowerCase().includes(activeTab.toLowerCase()));
-
       return (
         <div className="min-h-screen flex flex-col justify-between pb-28">
-          <header className="p-4 border-b border-slate-800 bg-[#0D1527] sticky top-0 z-20">
+          {/* Header */}
+          <header className="p-4 border-b border-slate-800 bg-[#0D1527] sticky top-0 z-30 shadow-md">
             <h1 className="text-xs font-bold tracking-widest text-[#D4AF37] uppercase">
-              FitZone Atelier — {garment?.name || 'Bespoke Shirt'}
+              FitZone Atelier — Bespoke Shirt
             </h1>
-            <div className="flex gap-4 mt-2 text-xs">
+            <div className="flex gap-4 mt-3 text-xs">
+              <button
+                onClick={() => setStep('FABRIC')}
+                className={`pb-1 transition-all ${
+                  step === 'FABRIC'
+                    ? 'text-[#D4AF37] border-b-2 border-[#D4AF37] font-bold'
+                    : 'text-slate-400'
+                }`}
+              >
+                1. SELECT FABRIC
+              </button>
+              <button
+                onClick={() => setStep('DESIGN')}
+                className={`pb-1 transition-all ${
+                  step === 'DESIGN'
+                    ? 'text-[#D4AF37] border-b-2 border-[#D4AF37] font-bold'
+                    : 'text-slate-400'
+                }`}
+              >
+                2. CUSTOMIZE DETAILS
+              </button>
+            </div>
+          </header>
+
+          {/* Main Body */}
+          <main className="p-4 max-w-md mx-auto w-full flex-1">
+            {step === 'FABRIC' && (
+              <div className="space-y-4">
+                {/* Filter Tabs */}
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {['All', 'Cotton', 'Linen', 'Silk', 'Suiting', 'Flannel'].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                        activeTab === tab
+                          ? 'bg-[#D4AF37] text-black shadow-md shadow-[#D4AF37]/20 font-bold'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Fabrics Grid */}
+                <div className="grid grid-cols-2 gap-3.5 pt-2">
+                  {filteredFabrics.map((fabric) => {
+                    const isSelected = selectedFabric?.fabric_id === fabric.fabric_id;
+                    return (
+                      <div
+                        key={fabric.fabric_id}
+                        onClick={() => setSelectedFabric(fabric)}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between min-h-[140px] ${
+                          isSelected
+                            ? 'border-[#D4AF37] bg-[#162038] ring-2 ring-[#D4AF37]/50 scale-[1.02] shadow-lg shadow-[#D4AF37]/20'
+                            : 'border-slate-800 bg-[#0D1527] hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="w-full h-12 rounded-xl bg-slate-900 border border-slate-800/80 flex items-center justify-center p-2 text-center">
+                          <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider line-clamp-2">
+                            {fabric.fabric_sku || 'BESPOKE'}
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5">
+                          <p className="text-xs font-bold text-white truncate">
+                            {fabric.fabric_name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                            {fabric.material_type}
+                          </p>
+                          <p className="text-xs font-bold text-[#D4AF37] mt-1.5">
+                            ₹{fabric.price_per_meter} <span className="text-[9px] font-normal text-slate-400">/meter</span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {step === 'DESIGN' && (
+              <div className="space-y-6">
+                {options.map((opt) => (
+                  <div key={opt.option_id} className="space-y-2.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-300 uppercase tracking-wider">
+                        {opt.option_name}
+                      </span>
+                      <span className="text-[#D4AF37] font-semibold">
+                        {selectedOptions[opt.option_type]?.value_name || 'Select'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {opt.design_option_values?.map((val) => {
+                        const isSelected =
+                          selectedOptions[opt.option_type]?.option_value_id === val.option_value_id;
+                        return (
+                          <button
+                            key={val.option_value_id}
+                            onClick={() =>
+                              setSelectedOptions((prev) => ({
+                                ...prev,
+                                [opt.option_type]: val,
+                              }))
+                            }
+                            className={`p-3 rounded-xl border text-left transition-all ${
+                              isSelected
+                                ? 'border-[#D4AF37] bg-[#162038] ring-1 ring-[#D4AF37] text-white'
+                                : 'border-slate-800 bg-[#0D1527] text-slate-300 hover:border-slate-700'
+                            }`}
+                          >
+                            <p className="text-xs font-semibold truncate">{val.value_name}</p>
+                            <p className="text-[10px] text-[#D4AF37] font-medium mt-1">
+                              {Number(val.additional_price) > 0 ? `+₹${val.additional_price}` : 'Included'}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* Sticky Footer */}
+          <footer className="fixed bottom-0 left-0 right-0 p-4 bg-[#0D1527] border-t border-slate-800 flex items-center justify-between z-30 shadow-2xl">
+            <div>
+              <span className="text-[10px] text-slate-400 block uppercase tracking-wider">Total Investment</span>
+              <p className="text-lg font-black text-[#D4AF37]">₹{grandTotal}</p>
+            </div>
+
+            {step === 'FABRIC' ? (
+              <button
+                onClick={() => setStep('DESIGN')}
+                className="px-5 py-2.5 bg-[#D4AF37] text-black font-bold text-xs rounded-xl shadow-lg shadow-[#D4AF37]/25 active:scale-95 transition-transform"
+              >
+                Next: Customize →
+              </button>
+            ) : (
+              <button
+                onClick={() => alert(`Order Ready!\nTotal Payable: ₹${grandTotal}\nProceeding to Measurements.`)}
+                className="px-5 py-2.5 bg-[#D4AF37] text-black font-bold text-xs rounded-xl shadow-lg shadow-[#D4AF37]/25 active:scale-95 transition-transform"
+              >
+                Next: Measurements →
+              </button>
+            )}
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
               <button
                 onClick={() => setStep('FABRIC')}
                 className={`pb-1 ${step === 'FABRIC' ? 'text-[#D4AF37] border-b-2 border-[#D4AF37] font-bold' : 'text-slate-400'}`}>
