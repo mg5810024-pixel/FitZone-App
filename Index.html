@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FitZone Bespoke Customizer</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-[#080C14] text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Supabase Credentials
+    const SUPABASE_URL = "https://kghboylsqrdugmmlnnnd.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnaGJveWxzcXJkdWdtbWxubm5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMjI4MjksImV4cCI6MjEwMjg5ODgyOX0.FtVyFNAs21I9PVjkTQw_CN26-a6deG0e2fIpTP_Yswo";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function App() {
+      const [step, setStep] = useState('FABRIC');
+      const [fabrics, setFabrics] = useState([]);
+      const [selectedFabric, setSelectedFabric] = useState(null);
+      const [garment, setGarment] = useState(null);
+      const [selectedOptions, setSelectedOptions] = useState({});
+      const [loading, setLoading] = useState(true);
+      const [activeTab, setActiveTab] = useState('All');
+
+      useEffect(() => {
+        async function fetchData() {
+          try {
+            // 1. Fetch Shirt Garment + Design Options
+            const { data: garmentData } = await supabase
+              .from('garments')
+              .select(`
+                garment_id,
+                garment_code,
+                name,
+                base_stitching_price,
+                garment_categories ( required_fabric_meters ),
+                design_options (
+                  option_id,
+                  option_type,
+                  option_name,
+                  design_option_values ( option_value_id, value_name, additional_price )
+                )
+              `)
+              .eq('garment_code', 'FZ-GAR-SHIRT')
+              .single();
+
+            if (garmentData) {
+              setGarment(garmentData);
+              const defaults = {};
+              garmentData.design_options?.forEach(opt => {
+                if (opt.design_option_values?.length > 0) {
+                  defaults[opt.option_type] = opt.design_option_values[0];
+                }
+              });
+              setSelectedOptions(defaults);
+            }
+
+            // 2. Fetch Live Fabrics
+            const { data: fabricData } = await supabase
+              .from('fabrics')
+              .select('*')
+              .eq('is_live', true)
+              .order('fabric_name');
+
+            if (fabricData) {
+              setFabrics(fabricData);
+              if (fabricData.length > 0) setSelectedFabric(fabricData[0]);
+            }
+          } catch (err) {
+            console.error(err);
+          } finally {
+            setLoading(false);
+          }
+        }
+        fetchData();
+      }, []);
+
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center text-[#D4AF37] font-bold">
+            Loading FitZone Atelier Database...
+          </div>
+        );
+      }
+
+      const reqMeters = garment?.garment_categories?.required_fabric_meters || 1.6;
+      const baseStitching = garment?.base_stitching_price || 0;
+      const fabricTotal = selectedFabric ? selectedFabric.price_per_meter * reqMeters : 0;
+      const designUpcharges = Object.values(selectedOptions).reduce((acc, curr) => acc + (Number(curr?.additional_price) || 0), 0);
+      const totalAmount = Math.round(baseStitching + fabricTotal + designUpcharges);
+
+      const filteredFabrics = activeTab === 'All' 
+        ? fabrics 
+        : fabrics.filter(f => f.material_type?.toLowerCase().includes(activeTab.toLowerCase()));
+
+      return (
+        <div className="min-h-screen flex flex-col justify-between pb-24">
+          {/* Header */}
+          <header className="p-4 border-b border-slate-800 bg-[#0D1527] sticky top-0 z-20">
+            <h1 className="text-xs font-bold tracking-widest text-[#D4AF37] uppercase">
+              FitZone Atelier — Bespoke Shirt
+            </h1>
+            <div className="flex gap-4 mt-2 text-xs">
+              <button 
+                onClick={() => setStep('FABRIC')} 
+                className={`pb-1 ${step === 'FABRIC' ? 'text-[#D4AF37] border-b-2 border-[#D4AF37] font-bold' : 'text-slate-400'}`}>
+                1. FABRIC
+              </button>
+              <button 
+                onClick={() => setStep('DESIGN')} 
+                className={`pb-1 ${step === 'DESIGN' ? 'text-[#D4AF37] border-b-2 border-[#D4AF37] font-bold' : 'text-slate-400'}`}>
+                2. CUSTOMIZE
+              </button>
+            </div>
+          </header>
+
+          {/* Main Body */}
+          <main className="p-4 max-w-md mx-auto w-full">
+            {step === 'FABRIC' && (
+              <div className="space-y-4">
+                {/* Tabs */}
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {['All', 'Cotton', 'Linen', 'Silk', 'Blend'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                        activeTab === tab ? 'bg-[#D4AF37] text-black' : 'bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredFabrics.map(fabric => {
+                    const isSelected = selectedFabric?.fabric_id === fabric.fabric_id;
+                    return (
+                      <div
+                        key={fabric.fabric_id}
+                        onClick={() => setSelectedFabric(fabric)}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                          isSelected ? 'border-[#D4AF37] bg-[#162038]' : 'border-slate-800 bg-[#0D1527]'
+                        }`}
+                      >
+                        <div className="h-20 rounded-lg bg-slate-900 flex items-center justify-center p-2 text-center mb-2">
+                          <span className="text-[10px] text-[#D4AF37] font-bold uppercase">{fabric.fabric_name}</span>
+                        </div>
+                        <p className="text-xs font-bold text-white truncate">{fabric.fabric_name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{fabric.composition || fabric.material_type}</p>
+                        <p className="text-[11px] text-[#D4AF37] font-semibold mt-1">₹{fabric.price_per_meter}/m</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {step === 'DESIGN' && garment && (
+              <div className="space-y-5">
+                {garment.design_options?.map(opt => (
+                  <div key={opt.option_id} className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="font-bold text-slate-300 uppercase">{opt.option_name}</span>
+                      <span className="text-[#D4AF37]">{selectedOptions[opt.option_type]?.value_name}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {opt.design_option_values?.map(val => {
+                        const isSelected = selectedOptions[opt.option_type]?.option_value_id === val.option_value_id;
+                        return (
+                          <button
+                            key={val.option_value_id}
+                            onClick={() => setSelectedOptions(prev => ({ ...prev, [opt.option_type]: val }))}
+                            className={`p-2.5 rounded-lg border text-left text-xs ${
+                              isSelected ? 'border-[#D4AF37] bg-[#162038] text-white' : 'border-slate-800 bg-[#0D1527] text-slate-300'
+                            }`}
+                          >
+                            <p className="font-semibold truncate">{val.value_name}</p>
+                            <p className="text-[10px] text-[#D4AF37] mt-0.5">
+                              {val.additional_price > 0 ? `+₹${val.additional_price}` : 'Included'}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* Sticky Bottom Bar */}
+          <footer className="fixed bottom-0 left-0 right-0 p-4 bg-[#0D1527] border-t border-slate-800 flex items-center justify-between z-30">
+            <div>
+              <span className="text-[10px] text-slate-400 uppercase">Total Amount</span>
+              <p className="text-lg font-bold text-[#D4AF37]">₹{totalAmount}</p>
+            </div>
+            {step === 'FABRIC' ? (
+              <button 
+                onClick={() => setStep('DESIGN')}
+                className="px-5 py-2 bg-[#D4AF37] text-black font-bold text-xs rounded-lg">
+                Next: Customize →
+              </button>
+            ) : (
+              <button 
+                onClick={() => alert(`Ready for Measurement! Total: ₹${totalAmount}`)}
+                className="px-5 py-2 bg-[#D4AF37] text-black font-bold text-xs rounded-lg">
+                Next: Fit Details →
+              </button>
+            )}
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
