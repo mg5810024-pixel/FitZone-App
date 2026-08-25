@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FitZone Bespoke Studio</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -115,12 +114,7 @@
   </footer>
 
   <script>
-    const SUPABASE_URL = "https://kghboylsqrdugmmlnnnd.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnaGJveWxzcXJkdWdtbWxubm5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzc1NTQsImV4cCI6MjA1NTc1MzU1NH0.FzFpB7y2XwP6-2wV_0PqvZ2vT8-J-fLzN_8yA4K8E0g";
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // Initial Live Fabrics Seed
-    const defaultFabrics = [
+    const fabrics = [
       { fabric_id: '1', fabric_sku: 'FZ-FAB-001', fabric_name: 'Classic Egyptian Cotton', material_type: 'Cotton', price_per_meter: 850 },
       { fabric_id: '2', fabric_sku: 'FZ-FAB-002', fabric_name: 'Sea Island Crisp Cotton', material_type: 'Cotton', price_per_meter: 1100 },
       { fabric_id: '3', fabric_sku: 'FZ-FAB-003', fabric_name: 'Pure Mulberry Silk Blend', material_type: 'Silk', price_per_meter: 1850 },
@@ -129,7 +123,7 @@
       { fabric_id: '6', fabric_sku: 'FZ-FAB-006', fabric_name: 'Bespoke Satin Weave', material_type: 'Silk', price_per_meter: 1600 }
     ];
 
-    const defaultOptions = [
+    const designOptions = [
       {
         option_name: 'Collar Style',
         option_type: 'COLLAR',
@@ -158,33 +152,20 @@
     ];
 
     let currentStep = 'FABRIC';
-    let fabrics = [...defaultFabrics];
-    let filteredFabrics = [...defaultFabrics];
-    let selectedFabric = defaultFabrics[0];
+    let filteredFabrics = [...fabrics];
+    let selectedFabric = fabrics[0];
     let selectedDesigns = {
-      COLLAR: defaultOptions[0].values[0],
-      CUFF: defaultOptions[1].values[0],
-      PLACKET: defaultOptions[2].values[0]
+      COLLAR: designOptions[0].values[0],
+      CUFF: designOptions[1].values[0],
+      PLACKET: designOptions[2].values[0]
     };
     const baseStitching = 1200;
     const reqMeters = 1.6;
 
-    async function init() {
+    function init() {
       renderFabrics();
       renderDesigns();
       calculateTotal();
-
-      // Async Supabase Sync
-      try {
-        const { data } = await db.from('fabrics').select('*').limit(30);
-        if (data && data.length > 0) {
-          fabrics = data;
-          filteredFabrics = data;
-          selectedFabric = data[0];
-          renderFabrics();
-          calculateTotal();
-        }
-      } catch(e) {}
     }
 
     function renderFabrics() {
@@ -218,7 +199,7 @@
     function renderDesigns() {
       const container = document.getElementById('design-container');
       container.innerHTML = '';
-      defaultOptions.forEach(opt => {
+      designOptions.forEach(opt => {
         const div = document.createElement('div');
         div.className = 'space-y-2';
         let btns = '';
@@ -288,7 +269,7 @@
       else if (currentStep === 'MEASURE') placeFinalOrder();
     }
 
-    async function placeFinalOrder() {
+    function placeFinalOrder() {
       const name = document.getElementById('cust-name').value.trim();
       const phone = document.getElementById('cust-phone').value.trim();
       if (!name || !phone) {
@@ -299,16 +280,6 @@
       const total = calculateTotal();
       const orderRef = 'FZ-ORD-' + Math.floor(100000 + Math.random() * 900000);
 
-      // Async order insertion in Supabase
-      try {
-        await db.from('orders').insert([{
-          order_number: orderRef,
-          total_amount: total,
-          order_status: 'PENDING_CONFIRMATION'
-        }]);
-      } catch(e){}
-
-      // Show UI Success
       document.getElementById('step-measure').classList.add('hidden');
       document.getElementById('main-footer').classList.add('hidden');
       document.getElementById('tab-fabric').parentElement.classList.add('hidden');
@@ -323,3 +294,4 @@
   </script>
 </body>
 </html>
+
