@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FitZone Bespoke Studio</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -47,8 +48,11 @@
         <button onclick="filterFabrics('Cotton', this)" class="px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-slate-800 text-slate-300 filter-btn">Cotton</button>
         <button onclick="filterFabrics('Linen', this)" class="px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-slate-800 text-slate-300 filter-btn">Linen</button>
         <button onclick="filterFabrics('Silk', this)" class="px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-slate-800 text-slate-300 filter-btn">Silk</button>
+        <button onclick="filterFabrics('Suiting', this)" class="px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap bg-slate-800 text-slate-300 filter-btn">Suiting</button>
       </div>
-      <div id="fabric-grid" class="grid grid-cols-2 gap-3 pt-1"></div>
+      <div id="fabric-grid" class="grid grid-cols-2 gap-3 pt-1">
+        <div class="col-span-2 text-center py-10 text-[#D4AF37] text-xs font-semibold">Connecting to Supabase Database...</div>
+      </div>
     </div>
 
     <!-- STEP 2: DESIGN CUSTOMIZER -->
@@ -114,55 +118,53 @@
   </footer>
 
   <script>
-    const fabrics = [
-      { fabric_id: '1', fabric_sku: 'FZ-FAB-001', fabric_name: 'Classic Egyptian Cotton', material_type: 'Cotton', price_per_meter: 850 },
-      { fabric_id: '2', fabric_sku: 'FZ-FAB-002', fabric_name: 'Sea Island Crisp Cotton', material_type: 'Cotton', price_per_meter: 1100 },
-      { fabric_id: '3', fabric_sku: 'FZ-FAB-003', fabric_name: 'Pure Mulberry Silk Blend', material_type: 'Silk', price_per_meter: 1850 },
-      { fabric_id: '4', fabric_sku: 'FZ-FAB-004', fabric_name: 'Irish Pure Linen', material_type: 'Linen', price_per_meter: 1450 },
-      { fabric_id: '5', fabric_sku: 'FZ-FAB-005', fabric_name: 'Royal Oxford Suiting', material_type: 'Cotton', price_per_meter: 950 },
-      { fabric_id: '6', fabric_sku: 'FZ-FAB-006', fabric_name: 'Bespoke Satin Weave', material_type: 'Silk', price_per_meter: 1600 }
-    ];
+    const SUPABASE_URL = "https://kghboylsqrdugmmlnnnd.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnaGJveWxzcXJkdWdtbWxubm5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxNzc1NTQsImV4cCI6MjA1NTc1MzU1NH0.FzFpB7y2XwP6-2wV_0PqvZ2vT8-J-fLzN_8yA4K8E0g";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const designOptions = [
-      {
-        option_name: 'Collar Style',
-        option_type: 'COLLAR',
-        values: [
-          { name: 'Cutaway Collar', price: 0 },
-          { name: 'Button-Down Collar', price: 0 },
-          { name: 'Bandhgala / Mandarin', price: 150 }
-        ]
-      },
-      {
-        option_name: 'Cuff Type',
-        option_type: 'CUFF',
-        values: [
-          { name: 'Single Button Round', price: 0 },
-          { name: 'French Cuff (Cufflink)', price: 200 }
-        ]
-      },
-      {
-        option_name: 'Front Placket',
-        option_type: 'PLACKET',
-        values: [
-          { name: 'Standard French Front', price: 0 },
-          { name: 'Concealed Tuxedo Placket', price: 250 }
-        ]
-      }
-    ];
+    let fabrics = [];
+    let filteredFabrics = [];
+    let selectedFabric = null;
+    let designOptions = [];
+    let selectedDesigns = {};
 
-    let currentStep = 'FABRIC';
-    let filteredFabrics = [...fabrics];
-    let selectedFabric = fabrics[0];
-    let selectedDesigns = {
-      COLLAR: designOptions[0].values[0],
-      CUFF: designOptions[1].values[0],
-      PLACKET: designOptions[2].values[0]
-    };
     const baseStitching = 1200;
     const reqMeters = 1.6;
+    let currentStep = 'FABRIC';
 
-    function init() {
+    async function init() {
+      try {
+        // Fetch live fabrics from Supabase
+        const { data: fabData, error: fErr } = await db.from('fabrics').select('*');
+        if (fabData && fabData.length > 0) {
+          fabrics = fabData;
+          filteredFabrics = fabData;
+          selectedFabric = fabData[0];
+        } else {
+          throw new Error("No fabrics found");
+        }
+
+        // Fetch live design options from Supabase
+        const { data: optData } = await db.from('design_options').select('*, design_option_values(*)');
+        if (optData && optData.length > 0) {
+          designOptions = optData;
+          optData.forEach(opt => {
+            if (opt.design_option_values && opt.design_option_values.length > 0) {
+              selectedDesigns[opt.option_type] = opt.design_option_values[0];
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Supabase fetch fallback triggered:", err);
+        // Fallback default if offline/error
+        fabrics = [
+          { fabric_id: '1', fabric_sku: 'FZ-FAB-001', fabric_name: 'Classic Egyptian Cotton', material_type: 'Cotton', price_per_meter: 850 },
+          { fabric_id: '2', fabric_sku: 'FZ-FAB-002', fabric_name: 'Sea Island Crisp Cotton', material_type: 'Cotton', price_per_meter: 1100 }
+        ];
+        filteredFabrics = fabrics;
+        selectedFabric = fabrics[0];
+      }
+
       renderFabrics();
       renderDesigns();
       calculateTotal();
@@ -171,8 +173,12 @@
     function renderFabrics() {
       const grid = document.getElementById('fabric-grid');
       grid.innerHTML = '';
+      if (filteredFabrics.length === 0) {
+        grid.innerHTML = '<div class="col-span-2 text-center py-6 text-xs text-slate-400">No fabrics match this filter.</div>';
+        return;
+      }
       filteredFabrics.forEach(f => {
-        const isSel = selectedFabric.fabric_id === f.fabric_id;
+        const isSel = selectedFabric?.fabric_id === f.fabric_id;
         const card = document.createElement('div');
         card.className = `p-3 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
           isSel ? 'border-[#D4AF37] bg-[#162038] ring-2 ring-[#D4AF37]/50 shadow-lg' : 'border-slate-800 bg-[#0D1527]'
@@ -183,12 +189,12 @@
           calculateTotal();
         };
         card.innerHTML = `
-          <div class="h-12 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center">
-            <span class="text-[10px] font-bold text-[#D4AF37] tracking-wider">${f.fabric_sku}</span>
+          <div class="h-12 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center p-1 text-center">
+            <span class="text-[10px] font-bold text-[#D4AF37] tracking-wider truncate">${f.fabric_sku || f.fabric_name}</span>
           </div>
           <div class="mt-2">
             <p class="text-xs font-bold text-white truncate">${f.fabric_name}</p>
-            <p class="text-[10px] text-slate-400">${f.material_type}</p>
+            <p class="text-[10px] text-slate-400 truncate">${f.material_type || 'Bespoke'}</p>
             <p class="text-xs font-bold text-[#D4AF37] mt-1">₹${f.price_per_meter}/m</p>
           </div>
         `;
@@ -199,25 +205,33 @@
     function renderDesigns() {
       const container = document.getElementById('design-container');
       container.innerHTML = '';
+      
+      if (designOptions.length === 0) {
+        container.innerHTML = '<div class="text-center py-6 text-xs text-slate-400">Loading Customization Options...</div>';
+        return;
+      }
+
       designOptions.forEach(opt => {
         const div = document.createElement('div');
         div.className = 'space-y-2';
         let btns = '';
-        opt.values.forEach(v => {
-          const isSel = selectedDesigns[opt.option_type].name === v.name;
+        
+        opt.design_option_values?.forEach(v => {
+          const isSel = selectedDesigns[opt.option_type]?.option_value_id === v.option_value_id;
           btns += `
-            <button onclick="setDesign('${opt.option_type}', '${v.name}', ${v.price})" class="p-3 rounded-xl border text-left text-xs ${
+            <button onclick="setDesign('${opt.option_type}', '${v.option_value_id}')" class="p-3 rounded-xl border text-left text-xs ${
               isSel ? 'border-[#D4AF37] bg-[#162038] text-white ring-1 ring-[#D4AF37]' : 'border-slate-800 bg-[#0D1527] text-slate-300'
             }">
-              <p class="font-semibold truncate">${v.name}</p>
-              <p class="text-[10px] text-[#D4AF37] mt-0.5">${v.price > 0 ? '+₹' + v.price : 'Included'}</p>
+              <p class="font-semibold truncate">${v.value_name}</p>
+              <p class="text-[10px] text-[#D4AF37] mt-0.5">${Number(v.additional_price) > 0 ? '+₹' + v.additional_price : 'Included'}</p>
             </button>
           `;
         });
+
         div.innerHTML = `
           <div class="flex justify-between text-xs font-bold">
             <span class="text-slate-300 uppercase">${opt.option_name}</span>
-            <span class="text-[#D4AF37]">${selectedDesigns[opt.option_type].name}</span>
+            <span class="text-[#D4AF37]">${selectedDesigns[opt.option_type]?.value_name || ''}</span>
           </div>
           <div class="grid grid-cols-2 gap-2">${btns}</div>
         `;
@@ -225,8 +239,10 @@
       });
     }
 
-    function setDesign(type, name, price) {
-      selectedDesigns[type] = { name, price };
+    function setDesign(type, valueId) {
+      const optGroup = designOptions.find(o => o.option_type === type);
+      const val = optGroup.design_option_values.find(v => v.option_value_id === valueId);
+      selectedDesigns[type] = val;
       renderDesigns();
       calculateTotal();
     }
@@ -234,13 +250,22 @@
     function filterFabrics(mat, btn) {
       document.querySelectorAll('.filter-btn').forEach(b => b.className = 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 filter-btn');
       btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#D4AF37] text-black filter-btn';
-      filteredFabrics = mat === 'All' ? fabrics : fabrics.filter(f => f.material_type === mat);
+      
+      if (mat === 'All') {
+        filteredFabrics = fabrics;
+      } else {
+        filteredFabrics = fabrics.filter(f => 
+          (f.material_type || '').toLowerCase().includes(mat.toLowerCase()) || 
+          (f.fabric_name || '').toLowerCase().includes(mat.toLowerCase())
+        );
+      }
       renderFabrics();
     }
 
     function calculateTotal() {
-      const fabCost = Number(selectedFabric.price_per_meter) * reqMeters;
-      const designCost = Object.values(selectedDesigns).reduce((acc, v) => acc + v.price, 0);
+      const pricePerMeter = Number(selectedFabric?.price_per_meter) || 0;
+      const fabCost = pricePerMeter * reqMeters;
+      const designCost = Object.values(selectedDesigns).reduce((acc, v) => acc + (Number(v?.additional_price) || 0), 0);
       const total = Math.round(baseStitching + fabCost + designCost);
       document.getElementById('grand-total').innerText = '₹' + total;
       return total;
@@ -264,12 +289,17 @@
     }
 
     function handleFlowNext() {
-      if (currentStep === 'FABRIC') goToStep('DESIGN');
+      if (currentStep === 'FABRIC') goToDataAndMove('DESIGN');
       else if (currentStep === 'DESIGN') goToStep('MEASURE');
       else if (currentStep === 'MEASURE') placeFinalOrder();
     }
 
-    function placeFinalOrder() {
+    function goToDataAndMove(s) {
+      renderDesigns();
+      goToStep(s);
+    }
+
+    async function placeFinalOrder() {
       const name = document.getElementById('cust-name').value.trim();
       const phone = document.getElementById('cust-phone').value.trim();
       if (!name || !phone) {
@@ -280,13 +310,21 @@
       const total = calculateTotal();
       const orderRef = 'FZ-ORD-' + Math.floor(100000 + Math.random() * 900000);
 
+      try {
+        await db.from('orders').insert([{
+          order_number: orderRef,
+          total_amount: total,
+          order_status: 'PENDING_CONFIRMATION'
+        }]);
+      } catch(e){}
+
       document.getElementById('step-measure').classList.add('hidden');
       document.getElementById('main-footer').classList.add('hidden');
       document.getElementById('tab-fabric').parentElement.classList.add('hidden');
       document.getElementById('step-success').classList.remove('hidden');
 
       document.getElementById('order-id-display').innerText = 'Order Reference: ' + orderRef;
-      document.getElementById('summary-fab').innerText = selectedFabric.fabric_name;
+      document.getElementById('summary-fab').innerText = selectedFabric?.fabric_name || 'Bespoke Fabric';
       document.getElementById('summary-price').innerText = '₹' + total;
     }
 
@@ -294,4 +332,3 @@
   </script>
 </body>
 </html>
-
